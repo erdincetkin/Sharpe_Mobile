@@ -307,32 +307,6 @@
   .result-table th { background: var(--surface-3); font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .result-table td.ticker, .result-table th:first-child { text-align: left; font-weight: 600; }
 
-  /* ----- Manual override list ----- */
-  .manual-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 8px;
-    display: grid;
-    grid-template-columns: 70px 1fr auto;
-    gap: 10px;
-    align-items: center;
-  }
-  .manual-card .ticker { font-weight: 600; }
-  .manual-card input[type="number"] {
-    width: 100%;
-    padding: 9px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 16px;
-    font-family: inherit;
-    text-align: right;
-  }
-  .manual-card .delta { font-size: 12px; min-width: 64px; text-align: right; }
-
   canvas { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); display: block; width: 100%; }
 
   .error { color: var(--error-fg); background: var(--error-bg); padding: 10px 12px; border-radius: 8px; margin: 10px 0; font-size: 13px; border: 1px solid var(--neg); }
@@ -367,14 +341,15 @@
 </div>
 <p class="subtitle">Mobile · Basic mode · Long-only, fully invested.</p>
 
-<!-- Input source -->
-<div class="toggle-group" id="src-toggle">
-  <label class="active"><input type="radio" name="src" value="manual" checked>Manual</label>
-  <label><input type="radio" name="src" value="excel">Excel</label>
+<!-- Settings (top of page) -->
+<h2>Settings</h2>
+<div class="field-row">
+  <label>Risk-Free Rate (% annual): <input type="number" id="rf" value="35" step="0.1" inputmode="decimal"></label>
+  <button id="upload-btn" class="secondary" style="flex:0 0 auto">Update Inputs</button>
 </div>
-<button id="upload-btn" class="secondary hidden" style="margin-left:8px; flex: 0 0 auto">Choose .xlsx</button>
 <input type="file" id="xlsx-file" accept=".xlsx,.xls" class="hidden">
 <div id="file-status" class="file-status"></div>
+<p class="small-note">Update Inputs loads μ, σ, and correlations from an Excel file (Column A = Date, B…N = ticker prices). Until then the watchlist below uses the manual values.</p>
 
 <!-- Watchlist -->
 <h2>Watchlist · Inputs &amp; Weights</h2>
@@ -389,12 +364,6 @@
 <h2>Correlation Matrix</h2>
 <div class="corr-wrap"><div id="corr-grid" class="corr-grid"></div></div>
 <p class="small-note">Scroll horizontally to see all pairs. The first column &amp; row stay sticky.</p>
-
-<!-- Settings -->
-<h2>Settings</h2>
-<div class="field-row">
-  <label>Risk-Free Rate (% annual): <input type="number" id="rf" value="35" step="0.1" inputmode="decimal"></label>
-</div>
 
 <!-- Run -->
 <button id="run-btn" class="primary">Run Optimization</button>
@@ -811,16 +780,6 @@ function renderBasic(r, A, rf) {
       </tr>`;
   }
 
-  let manualHtml = '';
-  for (let i = 0; i < w.length; i++) {
-    manualHtml += `
-      <div class="manual-card">
-        <div class="ticker">${escapeHTML(A.tickers[i])}</div>
-        <input type="number" inputmode="decimal" id="mw-${i}" value="${(w[i]*100).toFixed(2)}" step="0.1" oninput="onManual()">
-        <div class="delta" id="dw-${i}">+0.00%</div>
-      </div>`;
-  }
-
   const html = `
     <h2>Optimal Portfolio</h2>
     <div class="results-grid">
@@ -856,57 +815,9 @@ function renderBasic(r, A, rf) {
 
     <h2>Weights Comparison</h2>
     <canvas id="weight-chart" width="700" height="280"></canvas>
-
-    <h2>Manual Override</h2>
-    <p class="small-note">Edit weights below to see live Sharpe vs the optimum. Δ shown is vs optimal weight.</p>
-    ${manualHtml}
-    <div class="results-grid" style="margin-top:10px">
-      <div class="metric-card"><div class="label">Manual Sharpe</div><div class="value" id="mS">—</div></div>
-      <div class="metric-card"><div class="label">Δ Sharpe</div><div class="value" id="mDS">—</div></div>
-      <div class="metric-card"><div class="label">Return</div><div class="value" id="mMu">—</div></div>
-      <div class="metric-card"><div class="label">Vol</div><div class="value" id="mVol">—</div></div>
-    </div>
   `;
   document.getElementById('results').innerHTML = html;
   drawWeightChart(A.tickers, w, wInit);
-  // initialize manual override metrics
-  onManual();
-}
-
-function onManual() {
-  const r = lastResult; if (!r) return;
-  const A = r.A, rf = r.rf;
-  const n = A.tickers.length;
-  const wRaw = new Array(n);
-  for (let i = 0; i < n; i++) {
-    let v = parseFloat(document.getElementById(`mw-${i}`).value);
-    if (!isFinite(v)) v = 0;
-    wRaw[i] = clip(v / 100, A.lo[i], A.hi[i]);
-  }
-  const sumRaw = wRaw.reduce((a,b)=>a+b,0);
-  let w;
-  if (sumRaw < 1e-9) w = new Array(n).fill(1/n);
-  else if (Math.abs(sumRaw - 1) < 1e-6) w = wRaw;
-  else w = projectBoxSumEQ(wRaw, A.lo, A.hi, 1);
-
-  const portMu = dot(w, A.mu);
-  const portVol = Math.sqrt(quadForm(w, A.S));
-  const sharpe = sharpeWithCash(w, A.mu, A.S, rf);
-  const wOpt = r.optimal.weights;
-
-  document.getElementById('mS').textContent = sharpe.toFixed(3);
-  const ds = sharpe - r.optimal.sharpe;
-  const dsEl = document.getElementById('mDS');
-  dsEl.textContent = (ds >= 0 ? '+' : '') + ds.toFixed(3);
-  dsEl.className = 'value ' + (ds >= -1e-6 ? 'delta-pos' : 'delta-neg');
-  document.getElementById('mMu').textContent = (portMu*100).toFixed(2) + '%';
-  document.getElementById('mVol').textContent = (portVol*100).toFixed(2) + '%';
-  for (let i = 0; i < n; i++) {
-    const dw = (w[i] - wOpt[i]) * 100;
-    const el = document.getElementById(`dw-${i}`);
-    el.textContent = (dw >= 0 ? '+' : '') + dw.toFixed(2) + '%';
-    el.className = 'delta ' + (dw >= -1e-6 ? 'delta-pos' : 'delta-neg');
-  }
 }
 
 function chartTheme() {
@@ -1050,13 +961,6 @@ function toggleTheme() {
 // =====================================================================
 // Wiring
 // =====================================================================
-document.querySelectorAll('#src-toggle input').forEach(r => {
-  r.addEventListener('change', e => {
-    document.querySelectorAll('#src-toggle label').forEach(l => l.classList.remove('active'));
-    e.target.parentElement.classList.add('active');
-    document.getElementById('upload-btn').classList.toggle('hidden', e.target.value !== 'excel');
-  });
-});
 document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('xlsx-file').click());
 document.getElementById('xlsx-file').addEventListener('change', e => { if (e.target.files.length) handleExcel(e.target.files[0]); });
 document.getElementById('add-asset').addEventListener('click', addAsset);

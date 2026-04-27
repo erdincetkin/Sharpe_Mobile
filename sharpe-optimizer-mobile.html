@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Sharpe Optimizer</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sharpe">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+
+<style>
+  /* ===== Theme — Dark Terminal (default for mobile) ===== */
+  :root {
+    --bg:            #0d1117;
+    --surface:       #161b22;
+    --surface-2:     #0d1117;
+    --surface-3:     #1c232c;
+    --border:        #30363d;
+    --border-strong: #444c56;
+    --text:          #e6edf3;
+    --text-muted:    #8b949e;
+    --text-faint:    #6e7681;
+    --accent:        #ffb000;
+    --accent-strong: #ffc233;
+    --accent-soft:   #1f1a0a;
+    --accent-border: #5a4410;
+    --pos:           #3fb950;
+    --neg:           #ff6b6b;
+    --error-bg:      #2a1212;
+    --error-fg:      #ff8a8a;
+    --info-bg:       #0e1a2b;
+    --info-fg:       #6cb6ff;
+  }
+  body.light {
+    --bg:            #f8fafc;
+    --surface:       #ffffff;
+    --surface-2:     #f8fafc;
+    --surface-3:     #eef2f7;
+    --border:        #e5e7eb;
+    --border-strong: #cbd5e1;
+    --text:          #0f172a;
+    --text-muted:    #64748b;
+    --text-faint:    #94a3b8;
+    --accent:        #1e3a8a;
+    --accent-strong: #1e40af;
+    --accent-soft:   #eff6ff;
+    --accent-border: #bfdbfe;
+    --pos:           #15803d;
+    --neg:           #dc2626;
+    --error-bg:      #fef2f2;
+    --error-fg:      #991b1b;
+    --info-bg:       #eff6ff;
+    --info-fg:       #1e3a8a;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: max(env(safe-area-inset-top), 14px) 14px max(env(safe-area-inset-bottom), 24px);
+    font-size: 15px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.2px; }
+  h2 { font-size: 14px; font-weight: 600; color: var(--text); margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.6px; }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin: 0 0 14px; }
+
+  .header-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+  #theme-toggle {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+    flex-shrink: 0;
+  }
+
+  /* ----- Source toggle ----- */
+  .toggle-group {
+    display: inline-flex;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    margin: 4px 0 8px;
+  }
+  .toggle-group label {
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-group label.active { background: var(--accent); color: #0d1117; }
+  body.light .toggle-group label.active { color: #ffffff; }
+  .toggle-group input { display: none; }
+
+  /* ----- Asset cards ----- */
+  .asset-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .asset-card-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .asset-card-head input[type="checkbox"] {
+    width: 22px; height: 22px;
+    accent-color: var(--accent);
+  }
+  .asset-card-head input[type="text"] {
+    flex: 1;
+    font-weight: 600;
+    font-size: 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    min-width: 0;
+  }
+  .asset-card-head .delete-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    width: 36px; height: 36px;
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .asset-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .asset-grid label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .asset-grid input[type="number"] {
+    width: 100%;
+    padding: 9px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 16px; /* 16px+ prevents iOS auto-zoom on focus */
+    font-family: inherit;
+  }
+  .asset-grid input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  /* ----- Correlation matrix ----- */
+  .corr-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .corr-grid {
+    display: grid;
+    gap: 1px;
+    background: var(--border);
+    min-width: 100%;
+  }
+  .corr-cell {
+    background: var(--surface);
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 64px;
+  }
+  .corr-cell.header {
+    background: var(--surface-3);
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--text-muted);
+    position: sticky;
+    z-index: 1;
+  }
+  .corr-cell.header.left { left: 0; }
+  .corr-cell.header.top  { top: 0; }
+  .corr-cell.header.corner { top: 0; left: 0; z-index: 2; }
+  .corr-cell.diag { color: var(--text-faint); }
+  .corr-cell.mirror { color: var(--text-faint); font-style: italic; }
+  .corr-cell input[type="number"] {
+    width: 56px;
+    padding: 4px 2px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    text-align: center;
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+  }
+
+  /* ----- Settings ----- */
+  .field-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0; }
+  .field-row label {
+    font-size: 13px;
+    color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .field-row input[type="number"] {
+    width: 90px;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 16px;
+    font-family: inherit;
+  }
+
+  /* ----- Buttons ----- */
+  button.primary {
+    background: var(--accent);
+    color: #0d1117;
+    border: none;
+    padding: 14px 22px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 10px;
+    letter-spacing: 0.2px;
+  }
+  body.light button.primary { color: #ffffff; }
+  button.primary:active { background: var(--accent-strong); }
+  button.primary:disabled { background: var(--border); color: var(--text-faint); }
+  button.secondary {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    flex: 1;
+    min-height: 44px;
+  }
+  .btn-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .btn-row button { flex: 1 1 calc(50% - 4px); }
+
+  /* ----- Result cards ----- */
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  @media (min-width: 540px) {
+    .results-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  .metric-card {
+    background: var(--surface-2);
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .metric-card .label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+  .metric-card .value { font-size: 19px; font-weight: 600; color: var(--text); }
+  .metric-card .value.large { font-size: 26px; color: var(--accent); }
+
+  /* ----- Result table (Weights · Risk) ----- */
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--surface);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .result-table th, .result-table td {
+    padding: 9px 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-table th { background: var(--surface-3); font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .result-table td.ticker, .result-table th:first-child { text-align: left; font-weight: 600; }
+
+  /* ----- Manual override list ----- */
+  .manual-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: 70px 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+  .manual-card .ticker { font-weight: 600; }
+  .manual-card input[type="number"] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 16px;
+    font-family: inherit;
+    text-align: right;
+  }
+  .manual-card .delta { font-size: 12px; min-width: 64px; text-align: right; }
+
+  canvas { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); display: block; width: 100%; }
+
+  .error { color: var(--error-fg); background: var(--error-bg); padding: 10px 12px; border-radius: 8px; margin: 10px 0; font-size: 13px; border: 1px solid var(--neg); }
+  .info  { color: var(--info-fg);  background: var(--info-bg);  padding: 10px 12px; border-radius: 8px; margin: 10px 0; font-size: 13px; border: 1px solid var(--accent-border); }
+
+  .delta-pos { color: var(--pos); font-weight: 600; }
+  .delta-neg { color: var(--neg); font-weight: 600; }
+  .small-note { color: var(--text-muted); font-size: 12px; margin: 6px 0 0; line-height: 1.5; }
+  .hidden { display: none !important; }
+
+  .sharpe-interp {
+    margin: 10px 0 14px; padding: 10px 12px; border-radius: 10px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-border);
+    border-left: 4px solid var(--accent);
+    color: var(--text);
+    font-size: 13px; line-height: 1.5;
+  }
+  .sharpe-interp b { color: var(--accent); }
+
+  .file-status { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
+  .save-status { font-size: 12px; margin-top: 6px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <h1>Sharpe Optimizer</h1>
+  <button id="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle theme">
+    <span id="theme-toggle-icon">&#9728;</span><span id="theme-toggle-label">Light</span>
+  </button>
+</div>
+<p class="subtitle">Mobile · Basic mode · Long-only, fully invested.</p>
+
+<!-- Input source -->
+<div class="toggle-group" id="src-toggle">
+  <label class="active"><input type="radio" name="src" value="manual" checked>Manual</label>
+  <label><input type="radio" name="src" value="excel">Excel</label>
+</div>
+<button id="upload-btn" class="secondary hidden" style="margin-left:8px; flex: 0 0 auto">Choose .xlsx</button>
+<input type="file" id="xlsx-file" accept=".xlsx,.xls" class="hidden">
+<div id="file-status" class="file-status"></div>
+
+<!-- Watchlist -->
+<h2>Watchlist · Inputs &amp; Weights</h2>
+<div id="watchlist-cards"></div>
+<div class="btn-row">
+  <button id="add-asset" class="secondary">+ Add Asset</button>
+  <button id="reset-defaults" class="secondary">Reset Defaults</button>
+</div>
+<p class="small-note">Sum of weights: <b id="weight-sum">100.00%</b></p>
+
+<!-- Correlation matrix -->
+<h2>Correlation Matrix</h2>
+<div class="corr-wrap"><div id="corr-grid" class="corr-grid"></div></div>
+<p class="small-note">Scroll horizontally to see all pairs. The first column &amp; row stay sticky.</p>
+
+<!-- Settings -->
+<h2>Settings</h2>
+<div class="field-row">
+  <label>Risk-Free Rate (% annual): <input type="number" id="rf" value="35" step="0.1" inputmode="decimal"></label>
+</div>
+
+<!-- Run -->
+<button id="run-btn" class="primary">Run Optimization</button>
+<div id="status-msg"></div>
+
+<!-- Save / Load -->
+<h2>Save / Load</h2>
+<div class="btn-row">
+  <button id="save-btn" class="secondary">💾 Save</button>
+  <button id="load-btn" class="secondary">↻ Load</button>
+  <button id="clear-btn" class="secondary">🗑 Clear</button>
+</div>
+<div id="save-status" class="save-status"></div>
+
+<!-- Results -->
+<div id="results"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// =====================================================================
+// Defaults
+// =====================================================================
+const DEFAULT_ASSETS = [
+  { ticker: 'TUPRS',  mu: 40, sigma: 36.1, weight: 11.67, minW: 0, maxW: 100, include: true },
+  { ticker: 'KLKIM',  mu: 35, sigma: 38.8, weight: 11.67, minW: 0, maxW: 100, include: true },
+  { ticker: 'TAVHL',  mu: 45, sigma: 37.0, weight: 11.67, minW: 0, maxW: 100, include: true },
+  { ticker: 'CCOLA',  mu: 32, sigma: 35.0, weight: 11.67, minW: 0, maxW: 100, include: true },
+  { ticker: 'BIMAS',  mu: 25, sigma: 33.6, weight: 11.67, minW: 0, maxW: 100, include: true },
+  { ticker: 'MGROS',  mu: 45, sigma: 30.6, weight: 11.65, minW: 0, maxW: 100, include: true },
+  { ticker: 'USDTRY', mu: 30, sigma: 2.2,  weight: 30.00, minW: 0, maxW: 100, include: true },
+];
+const DEFAULT_CORR = [
+  [ 1.00,  0.01, -0.10,  0.23,  0.15,  0.12,  0.02 ],
+  [ 0.01,  1.00,  0.35,  0.29,  0.31,  0.27, -0.08 ],
+  [-0.10,  0.35,  1.00,  0.37,  0.42,  0.50, -0.18 ],
+  [ 0.23,  0.29,  0.37,  1.00,  0.39,  0.47, -0.16 ],
+  [ 0.15,  0.31,  0.42,  0.39,  1.00,  0.55, -0.19 ],
+  [ 0.12,  0.27,  0.50,  0.47,  0.55,  1.00, -0.16 ],
+  [ 0.02, -0.08, -0.18, -0.16, -0.19, -0.16,  1.00 ],
+];
+
+let assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS));
+let corr = JSON.parse(JSON.stringify(DEFAULT_CORR));
+let lastResult = null;
+
+// =====================================================================
+// Math
+// =====================================================================
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]*b[i]; return s; };
+const matVec = (M, v) => { const n = M.length, out = new Array(n); for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j < v.length; j++) s += M[i][j]*v[j]; out[i] = s; } return out; };
+const quadForm = (w, S) => dot(w, matVec(S, w));
+const clip = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+function covFromCorrSigma(C, sig) {
+  const n = C.length, S = [];
+  for (let i = 0; i < n; i++) { S.push([]); for (let j = 0; j < n; j++) S[i].push(C[i][j]*sig[i]*sig[j]); }
+  return S;
+}
+
+// Project onto {lo<=w<=hi, sum=s} via bisection on shift λ
+function projectBoxSumEQ(v, lo, hi, s) {
+  let lamLo = -1e9, lamHi = 1e9;
+  for (let it = 0; it < 120; it++) {
+    const lam = (lamLo + lamHi) / 2;
+    const wt = v.map((x, i) => clip(x - lam, lo[i], hi[i]));
+    const t = wt.reduce((a,b)=>a+b,0);
+    if (t > s) lamLo = lam; else lamHi = lam;
+    if (Math.abs(t - s) < 1e-12) break;
+  }
+  const lam = (lamLo + lamHi) / 2;
+  return v.map((x, i) => clip(x - lam, lo[i], hi[i]));
+}
+
+function sharpeWithCash(w, mu, S, rf) {
+  let er = 0;
+  for (let i = 0; i < w.length; i++) er += w[i] * (mu[i] - rf);
+  const v = Math.sqrt(Math.max(quadForm(w, S), 1e-20));
+  return er / v;
+}
+
+// =====================================================================
+// Basic optimizer: max Sharpe s.t. lo<=w<=hi, sum(w)=1
+// =====================================================================
+function optimizeBasic(mu, S, rf, lo, hi) {
+  const n = mu.length;
+  const sumLo = lo.reduce((a,b)=>a+b,0);
+  const sumHi = hi.reduce((a,b)=>a+b,0);
+  if (sumLo > 1 + 1e-9) return { error: `Sum of min weights ${(sumLo*100).toFixed(2)}% > 100% (infeasible).` };
+  if (sumHi < 1 - 1e-9) return { error: `Sum of max weights ${(sumHi*100).toFixed(2)}% < 100% — cannot reach fully-invested.` };
+  for (let i = 0; i < n; i++) if (lo[i] > hi[i] + 1e-9) return { error: `Asset ${i}: min > max.` };
+
+  const R = mu.map(m => m - rf);
+
+  function grad(w) {
+    const Sw = matVec(S, w);
+    const V = dot(w, Sw);
+    const num = dot(w, R);
+    const sV = Math.sqrt(Math.max(V, 1e-20));
+    const g = new Array(n);
+    for (let i = 0; i < n; i++) g[i] = R[i]/sV - num*Sw[i]/(V*sV);
+    return g;
+  }
+  function feasibleStart() {
+    const w = new Array(n);
+    for (let i = 0; i < n; i++) w[i] = lo[i] + Math.random() * (hi[i] - lo[i]);
+    return projectBoxSumEQ(w, lo, hi, 1);
+  }
+  function tangencyStart() {
+    const A = S.map(r => r.slice());
+    const b = R.slice();
+    const m = n;
+    for (let i = 0; i < m; i++) {
+      let pivot = i;
+      for (let k = i+1; k < m; k++) if (Math.abs(A[k][i]) > Math.abs(A[pivot][i])) pivot = k;
+      if (pivot !== i) { [A[i], A[pivot]] = [A[pivot], A[i]]; [b[i], b[pivot]] = [b[pivot], b[i]]; }
+      const p = A[i][i];
+      if (Math.abs(p) < 1e-12) return null;
+      for (let j = i; j < m; j++) A[i][j] /= p;
+      b[i] /= p;
+      for (let k = 0; k < m; k++) if (k !== i) {
+        const f = A[k][i];
+        for (let j = i; j < m; j++) A[k][j] -= f * A[i][j];
+        b[k] -= f * b[i];
+      }
+    }
+    const total = b.reduce((a,c)=>a+c,0);
+    let w = total > 0 ? b.map(x => x / total) : b.slice();
+    return projectBoxSumEQ(w, lo, hi, 1);
+  }
+
+  let bestW = null, bestS = -Infinity;
+  const restarts = 30;
+  for (let r = 0; r < restarts; r++) {
+    let w = (r === 0) ? (tangencyStart() || feasibleStart()) : feasibleStart();
+    let prevS = sharpeWithCash(w, mu, S, rf);
+    for (let it = 0; it < 800; it++) {
+      const g = grad(w);
+      let bestStep = 0, bestStepS = prevS, bestStepW = w;
+      for (const t of [0.0002, 0.001, 0.005, 0.02, 0.08, 0.3, 1.0]) {
+        const wn = projectBoxSumEQ(w.map((x,i) => x + t*g[i]), lo, hi, 1);
+        const sn = sharpeWithCash(wn, mu, S, rf);
+        if (sn > bestStepS) { bestStepS = sn; bestStep = t; bestStepW = wn; }
+      }
+      if (bestStep === 0) break;
+      const change = Math.max(...bestStepW.map((x,i)=>Math.abs(x - w[i])));
+      w = bestStepW;
+      if (bestStepS - prevS < 1e-11 && change < 1e-9) { prevS = bestStepS; break; }
+      prevS = bestStepS;
+    }
+    const sFin = sharpeWithCash(w, mu, S, rf);
+    if (sFin > bestS) { bestS = sFin; bestW = w; }
+  }
+  return { weights: bestW, sharpe: bestS };
+}
+
+// =====================================================================
+// UI rendering
+// =====================================================================
+function escapeHTML(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+function renderWatchlist() {
+  const root = document.getElementById('watchlist-cards');
+  root.innerHTML = '';
+  assets.forEach((a, i) => {
+    const card = document.createElement('div');
+    card.className = 'asset-card';
+    card.innerHTML = `
+      <div class="asset-card-head">
+        <input type="checkbox" ${a.include ? 'checked' : ''} onchange="updateAsset(${i},'include',this.checked)" aria-label="Include">
+        <input type="text" value="${escapeHTML(a.ticker)}" onchange="updateAsset(${i},'ticker',this.value)" autocapitalize="characters" autocomplete="off">
+        <button class="delete-btn" onclick="removeAsset(${i})" aria-label="Remove">×</button>
+      </div>
+      <div class="asset-grid">
+        <div><label>μ Return %</label><input type="number" inputmode="decimal" step="0.1" value="${a.mu}" onchange="updateAsset(${i},'mu',parseFloat(this.value))"></div>
+        <div><label>σ Risk %</label><input type="number" inputmode="decimal" step="0.1" value="${a.sigma}" onchange="updateAsset(${i},'sigma',parseFloat(this.value))"></div>
+        <div><label>Weight %</label><input type="number" inputmode="decimal" step="0.1" value="${a.weight}" onchange="updateAsset(${i},'weight',parseFloat(this.value))"></div>
+        <div><label>Min %</label><input type="number" inputmode="decimal" step="1" value="${a.minW}" onchange="updateAsset(${i},'minW',parseFloat(this.value))"></div>
+        <div><label>Max %</label><input type="number" inputmode="decimal" step="1" value="${a.maxW}" onchange="updateAsset(${i},'maxW',parseFloat(this.value))"></div>
+        <div></div>
+      </div>
+    `;
+    root.appendChild(card);
+  });
+  renderCorr();
+  updateWeightSum();
+}
+
+function updateAsset(i, field, val) {
+  assets[i][field] = val;
+  if (field === 'ticker') renderCorr();
+  if (field === 'weight') updateWeightSum();
+}
+function removeAsset(i) {
+  if (assets.length <= 2) return;
+  assets.splice(i, 1);
+  corr.splice(i, 1); corr.forEach(r => r.splice(i, 1));
+  renderWatchlist();
+}
+function addAsset() {
+  const k = assets.length;
+  assets.push({ ticker: `ASSET${k+1}`, mu: 50, sigma: 30, weight: 0, minW: 0, maxW: 100, include: true });
+  corr.forEach(r => r.push(0));
+  const newRow = new Array(k+1).fill(0); newRow[k] = 1;
+  corr.push(newRow);
+  renderWatchlist();
+}
+function updateWeightSum() {
+  const sum = assets.filter(a => a.include).reduce((s, a) => s + (a.weight || 0), 0);
+  const el = document.getElementById('weight-sum');
+  el.textContent = sum.toFixed(2) + '%';
+  el.style.color = (sum > 100.001) ? 'var(--neg)' : (Math.abs(sum - 100) < 0.5 ? 'var(--pos)' : 'var(--text-muted)');
+}
+
+function renderCorr() {
+  const grid = document.getElementById('corr-grid');
+  const n = assets.length;
+  grid.style.gridTemplateColumns = `72px repeat(${n}, minmax(64px, 1fr))`;
+  let html = '<div class="corr-cell header corner"></div>';
+  for (const a of assets) html += `<div class="corr-cell header top">${escapeHTML(a.ticker)}</div>`;
+  for (let i = 0; i < n; i++) {
+    html += `<div class="corr-cell header left">${escapeHTML(assets[i].ticker)}</div>`;
+    for (let j = 0; j < n; j++) {
+      if (i === j) html += `<div class="corr-cell diag">1.00</div>`;
+      else if (j < i) html += `<div class="corr-cell mirror">${corr[i][j].toFixed(2)}</div>`;
+      else html += `<div class="corr-cell"><input type="number" inputmode="decimal" value="${corr[i][j].toFixed(2)}" step="0.01" min="-1" max="1" onchange="updateCorr(${i},${j},parseFloat(this.value))"></div>`;
+    }
+  }
+  grid.innerHTML = html;
+}
+function updateCorr(i, j, v) {
+  if (isNaN(v)) v = 0;
+  v = clip(v, -1, 1);
+  corr[i][j] = v; corr[j][i] = v;
+  renderCorr();
+}
+
+function sharpeInterp(s, label = 'Sharpe') {
+  if (!isFinite(s)) return '';
+  let band;
+  if (s < 0)        band = 'negative — the portfolio underperforms the risk-free rate.';
+  else if (s < 0.5) band = 'weak — barely compensates for volatility.';
+  else if (s < 1.0) band = 'moderate — acceptable risk-adjusted return.';
+  else if (s < 2.0) band = 'strong — solid risk-adjusted performance.';
+  else if (s < 3.0) band = 'very strong — verify σ/μ are realistic.';
+  else              band = 'exceptional — likely optimistic μ or under-stated σ.';
+  const v = s.toFixed(2);
+  return `<div class="sharpe-interp"><b>${label} ${v}</b> — ${band}</div>`;
+}
+
+// =====================================================================
+// Excel upload
+// =====================================================================
+function handleExcel(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+      if (rows.length < 3) throw new Error('Sheet has too few rows.');
+      const header = rows[0];
+      const tickers = header.slice(1).filter(x => x != null && String(x).trim() !== '').map(String);
+      if (tickers.length < 2) throw new Error('Need at least 2 asset columns.');
+      const dates = [], prices = [];
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r]; if (row[0] == null) continue;
+        let d = row[0];
+        if (typeof d === 'number') d = new Date(Math.round((d - 25569)*86400*1000));
+        else if (!(d instanceof Date)) d = new Date(d);
+        if (isNaN(d.getTime())) continue;
+        const px = new Array(tickers.length);
+        let valid = true;
+        for (let i = 0; i < tickers.length; i++) {
+          const v = row[i+1];
+          const num = (typeof v === 'number') ? v : parseFloat(v);
+          if (!isFinite(num)) { valid = false; break; }
+          px[i] = num;
+        }
+        if (!valid) continue;
+        dates.push(d); prices.push(px);
+      }
+      if (prices.length < 5) throw new Error('Need at least 5 price rows.');
+
+      const n = tickers.length, T = prices.length;
+      const rets = [];
+      for (let t = 1; t < T; t++) {
+        const r = new Array(n);
+        for (let i = 0; i < n; i++) r[i] = prices[t][i] / prices[t-1][i] - 1;
+        rets.push(r);
+      }
+      const N = rets.length;
+      const deltas = [];
+      for (let t = 1; t < dates.length; t++) deltas.push((dates[t] - dates[t-1]) / 86400000);
+      deltas.sort((a,b)=>a-b);
+      const md = deltas[Math.floor(deltas.length/2)];
+      let ann = 252; let label = 'daily';
+      if (md > 1.5 && md < 9) { ann = 52; label = 'weekly'; }
+      else if (md >= 9 && md < 40) { ann = 12; label = 'monthly'; }
+      else if (md >= 40) { ann = 1; label = 'annual'; }
+
+      const muRaw = new Array(n).fill(0);
+      for (let t = 0; t < N; t++) for (let i = 0; i < n; i++) muRaw[i] += rets[t][i];
+      for (let i = 0; i < n; i++) muRaw[i] /= N;
+      const cov = []; for (let i = 0; i < n; i++) { cov.push([]); for (let j = 0; j < n; j++) {
+        let c = 0; for (let t = 0; t < N; t++) c += (rets[t][i]-muRaw[i])*(rets[t][j]-muRaw[j]);
+        cov[i].push(c / (N-1));
+      } }
+      const muAnn = muRaw.map(m => m * ann * 100);
+      const sigAnn = cov.map((row, i) => Math.sqrt(Math.max(row[i],0) * ann) * 100);
+      const corrAnn = cov.map((row, i) => row.map((c, j) => {
+        const d = Math.sqrt(Math.max(cov[i][i],1e-20) * Math.max(cov[j][j],1e-20));
+        return c / d;
+      }));
+
+      assets = tickers.map((tk, i) => ({
+        ticker: tk,
+        mu: +muAnn[i].toFixed(2),
+        sigma: +sigAnn[i].toFixed(2),
+        weight: +(100/n).toFixed(2),
+        minW: 0, maxW: 100,
+        include: true
+      }));
+      corr = corrAnn.map(row => row.map(v => +v.toFixed(4)));
+      document.getElementById('file-status').textContent = `Loaded ${n} assets, ${N} returns (${label}, ann ×${ann}).`;
+      renderWatchlist();
+    } catch (err) {
+      document.getElementById('file-status').textContent = 'Error: ' + err.message;
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// =====================================================================
+// Run
+// =====================================================================
+function getActive() {
+  const idx = []; assets.forEach((a, i) => { if (a.include) idx.push(i); });
+  if (idx.length < 2) throw new Error('Need at least 2 included assets.');
+  const tickers = idx.map(i => assets[i].ticker);
+  const mu = idx.map(i => assets[i].mu / 100);
+  const sigma = idx.map(i => assets[i].sigma / 100);
+  const lo = idx.map(i => assets[i].minW / 100);
+  const hi = idx.map(i => assets[i].maxW / 100);
+  const w0 = idx.map(i => (assets[i].weight || 0) / 100);
+  const C = idx.map(i => idx.map(j => corr[i][j]));
+  const S = covFromCorrSigma(C, sigma);
+  return { idx, tickers, mu, sigma, lo, hi, w0, S };
+}
+
+function run() {
+  const status = document.getElementById('status-msg');
+  const results = document.getElementById('results');
+  status.innerHTML = ''; results.innerHTML = '';
+  let A;
+  try { A = getActive(); }
+  catch (e) { status.innerHTML = `<div class="error">${e.message}</div>`; return; }
+  const rf = parseFloat(document.getElementById('rf').value) / 100;
+  if (!isFinite(rf)) { status.innerHTML = '<div class="error">Invalid risk-free rate.</div>'; return; }
+  const sumLo = A.lo.reduce((a,b)=>a+b,0);
+  if (sumLo > 1 + 1e-9) { status.innerHTML = `<div class="error">Sum of min weights ${(sumLo*100).toFixed(2)}% > 100% (infeasible).</div>`; return; }
+
+  status.innerHTML = `<div class="info">Optimizing…</div>`;
+  setTimeout(() => {
+    try {
+      const r = optimizeBasic(A.mu, A.S, rf, A.lo, A.hi);
+      if (r.error) { status.innerHTML = `<div class="error">${r.error}</div>`; return; }
+      lastResult = { A, rf, optimal: r };
+      renderBasic(r, A, rf);
+      status.innerHTML = '';
+    } catch (err) {
+      status.innerHTML = `<div class="error">${err.message}</div>`;
+      console.error(err);
+    }
+  }, 30);
+}
+
+// =====================================================================
+// Render — Basic
+// =====================================================================
+function renderBasic(r, A, rf) {
+  const w = r.weights;
+  const portMu = dot(w, A.mu);
+  const portVol = Math.sqrt(quadForm(w, A.S));
+  const sharpe = r.sharpe;
+  const Sw = matVec(A.S, w);
+  const rcShare = w.map((wi, i) => (wi * Sw[i]) / Math.max(portVol*portVol, 1e-20));
+
+  let wInit = A.w0.slice();
+  const sumW0 = wInit.reduce((a,b)=>a+b, 0);
+  if (sumW0 > 1e-9) wInit = wInit.map(x => x / sumW0);
+  else wInit = w.slice();
+
+  const iMu = dot(wInit, A.mu);
+  const iVol = Math.sqrt(quadForm(wInit, A.S));
+  const iSharpe = iVol > 1e-12 ? (iMu - rf) / iVol : NaN;
+
+  let weightsTable = '';
+  let initSum = 0, rcSum = 0;
+  for (let i = 0; i < w.length; i++) {
+    const d = (w[i] - wInit[i]) * 100;
+    const dStr = (d >= 0 ? '+' : '') + d.toFixed(2) + '%';
+    const dCls = d >= -1e-6 ? 'delta-pos' : 'delta-neg';
+    initSum += wInit[i];
+    rcSum += rcShare[i];
+    weightsTable += `
+      <tr>
+        <td class="ticker">${escapeHTML(A.tickers[i])}</td>
+        <td>${(wInit[i]*100).toFixed(2)}%</td>
+        <td>${(w[i]*100).toFixed(2)}%</td>
+        <td class="${dCls}">${dStr}</td>
+        <td>${(rcShare[i]*100).toFixed(2)}%</td>
+      </tr>`;
+  }
+
+  let manualHtml = '';
+  for (let i = 0; i < w.length; i++) {
+    manualHtml += `
+      <div class="manual-card">
+        <div class="ticker">${escapeHTML(A.tickers[i])}</div>
+        <input type="number" inputmode="decimal" id="mw-${i}" value="${(w[i]*100).toFixed(2)}" step="0.1" oninput="onManual()">
+        <div class="delta" id="dw-${i}">+0.00%</div>
+      </div>`;
+  }
+
+  const html = `
+    <h2>Optimal Portfolio</h2>
+    <div class="results-grid">
+      <div class="metric-card"><div class="label">Sharpe</div><div class="value large">${sharpe.toFixed(3)}</div></div>
+      <div class="metric-card"><div class="label">Expected Return</div><div class="value">${(portMu*100).toFixed(2)}%</div></div>
+      <div class="metric-card"><div class="label">Volatility</div><div class="value">${(portVol*100).toFixed(2)}%</div></div>
+      <div class="metric-card"><div class="label">Excess Return</div><div class="value">${((portMu-rf)*100).toFixed(2)}%</div></div>
+    </div>
+    ${sharpeInterp(sharpe, 'Sharpe')}
+
+    <h2>Weights · Risk Contribution</h2>
+    <div style="overflow-x:auto"><table class="result-table">
+      <thead><tr><th>Ticker</th><th>Initial %</th><th>Optimal %</th><th>Δ</th><th>Risk %</th></tr></thead>
+      <tbody>${weightsTable}
+        <tr style="background:var(--surface-3); font-weight:600">
+          <td>Sum</td>
+          <td>${(initSum*100).toFixed(2)}%</td>
+          <td>100.00%</td>
+          <td>—</td>
+          <td>${(rcSum*100).toFixed(2)}%</td>
+        </tr>
+      </tbody>
+    </table></div>
+    <p class="small-note">Initial = your asset-table weights, normalized to 100%. Δ = Optimal − Initial. Risk = optimal portfolio's per-asset variance share.</p>
+
+    <h2>Initial Portfolio</h2>
+    <div class="results-grid">
+      <div class="metric-card"><div class="label">Initial Sharpe</div><div class="value large" style="color:var(--text)">${isFinite(iSharpe) ? iSharpe.toFixed(3) : '—'}</div></div>
+      <div class="metric-card"><div class="label">Δ Sharpe</div><div class="value">${isFinite(iSharpe) ? (iSharpe - sharpe).toFixed(3) : '—'}</div></div>
+      <div class="metric-card"><div class="label">Initial Return</div><div class="value">${(iMu*100).toFixed(2)}%</div></div>
+      <div class="metric-card"><div class="label">Initial Vol</div><div class="value">${(iVol*100).toFixed(2)}%</div></div>
+    </div>
+
+    <h2>Weights Comparison</h2>
+    <canvas id="weight-chart" width="700" height="280"></canvas>
+
+    <h2>Manual Override</h2>
+    <p class="small-note">Edit weights below to see live Sharpe vs the optimum. Δ shown is vs optimal weight.</p>
+    ${manualHtml}
+    <div class="results-grid" style="margin-top:10px">
+      <div class="metric-card"><div class="label">Manual Sharpe</div><div class="value" id="mS">—</div></div>
+      <div class="metric-card"><div class="label">Δ Sharpe</div><div class="value" id="mDS">—</div></div>
+      <div class="metric-card"><div class="label">Return</div><div class="value" id="mMu">—</div></div>
+      <div class="metric-card"><div class="label">Vol</div><div class="value" id="mVol">—</div></div>
+    </div>
+  `;
+  document.getElementById('results').innerHTML = html;
+  drawWeightChart(A.tickers, w, wInit);
+  // initialize manual override metrics
+  onManual();
+}
+
+function onManual() {
+  const r = lastResult; if (!r) return;
+  const A = r.A, rf = r.rf;
+  const n = A.tickers.length;
+  const wRaw = new Array(n);
+  for (let i = 0; i < n; i++) {
+    let v = parseFloat(document.getElementById(`mw-${i}`).value);
+    if (!isFinite(v)) v = 0;
+    wRaw[i] = clip(v / 100, A.lo[i], A.hi[i]);
+  }
+  const sumRaw = wRaw.reduce((a,b)=>a+b,0);
+  let w;
+  if (sumRaw < 1e-9) w = new Array(n).fill(1/n);
+  else if (Math.abs(sumRaw - 1) < 1e-6) w = wRaw;
+  else w = projectBoxSumEQ(wRaw, A.lo, A.hi, 1);
+
+  const portMu = dot(w, A.mu);
+  const portVol = Math.sqrt(quadForm(w, A.S));
+  const sharpe = sharpeWithCash(w, A.mu, A.S, rf);
+  const wOpt = r.optimal.weights;
+
+  document.getElementById('mS').textContent = sharpe.toFixed(3);
+  const ds = sharpe - r.optimal.sharpe;
+  const dsEl = document.getElementById('mDS');
+  dsEl.textContent = (ds >= 0 ? '+' : '') + ds.toFixed(3);
+  dsEl.className = 'value ' + (ds >= -1e-6 ? 'delta-pos' : 'delta-neg');
+  document.getElementById('mMu').textContent = (portMu*100).toFixed(2) + '%';
+  document.getElementById('mVol').textContent = (portVol*100).toFixed(2) + '%';
+  for (let i = 0; i < n; i++) {
+    const dw = (w[i] - wOpt[i]) * 100;
+    const el = document.getElementById(`dw-${i}`);
+    el.textContent = (dw >= 0 ? '+' : '') + dw.toFixed(2) + '%';
+    el.className = 'delta ' + (dw >= -1e-6 ? 'delta-pos' : 'delta-neg');
+  }
+}
+
+function chartTheme() {
+  const cs = getComputedStyle(document.body);
+  const v = (k, fb) => (cs.getPropertyValue(k).trim() || fb);
+  return {
+    text:    v('--text',         '#e6edf3'),
+    muted:   v('--text-muted',   '#8b949e'),
+    grid:    v('--border',       '#30363d'),
+    axis:    v('--border-strong','#444c56'),
+    accent:  v('--accent',       '#ffb000'),
+    accent2: v('--text-muted',   '#8b949e'),
+    surface: v('--surface',      '#161b22'),
+  };
+}
+
+function drawWeightChart(tickers, wOpt, wInit) {
+  const c = document.getElementById('weight-chart'); if (!c) return;
+  // Re-size canvas to viewport
+  const targetW = c.clientWidth || 360;
+  const dpr = window.devicePixelRatio || 1;
+  c.width = targetW * dpr;
+  c.height = 280 * dpr;
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = targetW, H = 280;
+  const T = chartTheme();
+  ctx.clearRect(0, 0, W, H);
+  const n = tickers.length;
+  const padL = 44, padR = 12, padT = 32, padB = 38;
+  const aw = W - padL - padR, ah = H - padT - padB;
+  const maxV = Math.max(...wOpt, ...wInit, 0.05) * 1.1;
+  ctx.strokeStyle = T.axis;
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, padT+ah); ctx.lineTo(padL+aw, padT+ah); ctx.stroke();
+  ctx.font = '10px sans-serif'; ctx.fillStyle = T.muted;
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + ah - (g/4)*ah;
+    ctx.strokeStyle = T.grid;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL+aw, y); ctx.stroke();
+    ctx.fillStyle = T.muted; ctx.textAlign = 'right';
+    ctx.fillText(((g/4)*maxV*100).toFixed(0)+'%', padL-4, y+3);
+  }
+  const slot = aw / n;
+  for (let i = 0; i < n; i++) {
+    const cx = padL + (i + 0.5) * slot;
+    const ho = (wOpt[i] / maxV) * ah;
+    const hi = (wInit[i] / maxV) * ah;
+    ctx.fillStyle = T.accent;
+    ctx.fillRect(cx - slot*0.36, padT + ah - ho, slot*0.32, ho);
+    ctx.fillStyle = T.accent2;
+    ctx.fillRect(cx + slot*0.04, padT + ah - hi, slot*0.32, hi);
+    ctx.fillStyle = T.text;
+    ctx.textAlign = 'center'; ctx.font = '10px sans-serif';
+    ctx.fillText(tickers[i].slice(0, 6), cx, padT + ah + 14);
+  }
+  // Legend
+  ctx.fillStyle = T.accent; ctx.fillRect(padL, 10, 10, 10);
+  ctx.fillStyle = T.text; ctx.textAlign = 'left'; ctx.font = '11px sans-serif';
+  ctx.fillText('Optimal', padL + 14, 19);
+  ctx.fillStyle = T.accent2; ctx.fillRect(padL + 76, 10, 10, 10);
+  ctx.fillStyle = T.text; ctx.fillText('Initial', padL + 90, 19);
+}
+
+// =====================================================================
+// Save / Load (localStorage)
+// =====================================================================
+const STORAGE_KEY = 'sharpeOptimizerMobileState_v1';
+
+function saveState() {
+  try {
+    const state = {
+      assets, corr,
+      rf: parseFloat(document.getElementById('rf').value),
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    showSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`);
+  } catch (e) { showSaveStatus('Save failed: ' + e.message, true); }
+}
+
+function loadState(silent = false) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) { if (!silent) showSaveStatus('No saved state.', true); return false; }
+    const state = JSON.parse(raw);
+    if (Array.isArray(state.assets)) assets = state.assets;
+    if (Array.isArray(state.corr)) corr = state.corr;
+    if (typeof state.rf === 'number') document.getElementById('rf').value = state.rf;
+    renderWatchlist();
+    if (!silent && state.savedAt) showSaveStatus(`Loaded from ${new Date(state.savedAt).toLocaleString()}`);
+    return true;
+  } catch (e) { if (!silent) showSaveStatus('Load failed: ' + e.message, true); return false; }
+}
+function clearSaved() {
+  try { localStorage.removeItem(STORAGE_KEY); showSaveStatus('Saved state cleared.'); }
+  catch (e) { showSaveStatus('Clear failed: ' + e.message, true); }
+}
+function showSaveStatus(msg, isError = false) {
+  const el = document.getElementById('save-status');
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--neg)' : 'var(--pos)';
+  if (!isError) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
+}
+
+// =====================================================================
+// Theme toggle
+// =====================================================================
+const THEME_KEY = 'sharpeOptimizerMobileTheme_v1';
+function applyTheme(themeMode) {
+  const light = themeMode === 'light';
+  document.body.classList.toggle('light', light);
+  const icon = document.getElementById('theme-toggle-icon');
+  const label = document.getElementById('theme-toggle-label');
+  if (icon)  icon.innerHTML  = light ? '&#9789;' : '&#9728;';
+  if (label) label.textContent = light ? 'Dark' : 'Light';
+  // Update meta theme-color so the iOS status bar matches
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', light ? '#ffffff' : '#0d1117');
+  // Redraw chart if a result is on screen
+  try {
+    if (lastResult && document.getElementById('weight-chart')) {
+      const w = lastResult.optimal.weights;
+      let wInit = lastResult.A.w0.slice();
+      const s = wInit.reduce((a,b)=>a+b,0);
+      wInit = s > 1e-9 ? wInit.map(x => x/s) : w.slice();
+      drawWeightChart(lastResult.A.tickers, w, wInit);
+    }
+  } catch (_) {}
+}
+function toggleTheme() {
+  const next = document.body.classList.contains('light') ? 'dark' : 'light';
+  try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+  applyTheme(next);
+}
+(() => {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (_) {}
+  applyTheme(saved === 'light' ? 'light' : 'dark');
+})();
+
+// =====================================================================
+// Wiring
+// =====================================================================
+document.querySelectorAll('#src-toggle input').forEach(r => {
+  r.addEventListener('change', e => {
+    document.querySelectorAll('#src-toggle label').forEach(l => l.classList.remove('active'));
+    e.target.parentElement.classList.add('active');
+    document.getElementById('upload-btn').classList.toggle('hidden', e.target.value !== 'excel');
+  });
+});
+document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('xlsx-file').click());
+document.getElementById('xlsx-file').addEventListener('change', e => { if (e.target.files.length) handleExcel(e.target.files[0]); });
+document.getElementById('add-asset').addEventListener('click', addAsset);
+document.getElementById('reset-defaults').addEventListener('click', () => {
+  assets = JSON.parse(JSON.stringify(DEFAULT_ASSETS));
+  corr = JSON.parse(JSON.stringify(DEFAULT_CORR));
+  document.getElementById('rf').value = 35;
+  document.getElementById('file-status').textContent = '';
+  renderWatchlist();
+});
+document.getElementById('run-btn').addEventListener('click', run);
+document.getElementById('save-btn').addEventListener('click', saveState);
+document.getElementById('load-btn').addEventListener('click', () => loadState(false));
+document.getElementById('clear-btn').addEventListener('click', clearSaved);
+
+// Auto-load on init if state exists
+const autoLoaded = loadState(true);
+if (!autoLoaded) renderWatchlist();
+(() => {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try {
+      const t = new Date(JSON.parse(raw).savedAt).toLocaleString();
+      const el = document.getElementById('save-status');
+      el.textContent = `Restored from save at ${t}`;
+      el.style.color = 'var(--text-muted)';
+    } catch (_) {}
+  }
+})();
+
+// =====================================================================
+// Service worker registration (PWA)
+// =====================================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>

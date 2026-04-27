@@ -2,7 +2,7 @@
 // Cache-first for the app shell so the page works offline once installed.
 // Bump CACHE_VERSION when you ship a new app build to force clients to refresh.
 
-const CACHE_VERSION = 'sharpe-mobile-v2';
+const CACHE_VERSION = 'sharpe-mobile-v3';
 const SHELL = [
   './',
   './sharpe-optimizer-mobile.html',
